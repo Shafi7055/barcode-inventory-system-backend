@@ -9,8 +9,8 @@ Express API for local development with the Next.js frontend. It has no authentic
 
 ## Local setup
 
-1. Copy `.env.example` to `.env` and configure `DATABASE_URL`.
-2. Create the database specified by `DATABASE_URL`.
+1. Copy `.env.example` to `.env` and configure `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD` (or set `DATABASE_URL`).
+2. Create the PostgreSQL database named in `DB_NAME` or `DATABASE_URL`.
 3. Run `npm install`, then `npm run db:setup`.
 4. Run `npm run dev`; the API listens on port 4000 by default.
 5. In the frontend, copy `.env.local.example` to `.env.local` and run its `npm run dev`.

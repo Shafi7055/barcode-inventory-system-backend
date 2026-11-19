@@ -3,10 +3,9 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const { randomUUID, createHash } = require("node:crypto");
-const { Pool } = require("pg");
+const { pool } = require("./db");
 
 const app = express();
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const PORT = Number(process.env.PORT) || 4000;
 
 class ApiError extends Error {
@@ -538,10 +537,7 @@ app.use("/api", (_req, _res, next) => next(new ApiError(404, "NOT_FOUND", "API r
 app.use(sendApiError);
 
 if (require.main === module) {
-  if (!process.env.DATABASE_URL) {
-    console.error("DATABASE_URL must be set. Copy .env.example to .env and configure PostgreSQL.");
-    process.exitCode = 1;
-  } else if (process.env.NODE_ENV === "production") {
+  if (process.env.NODE_ENV === "production") {
     console.error("The no-auth API is local-development only and cannot run in production.");
     process.exitCode = 1;
   } else {

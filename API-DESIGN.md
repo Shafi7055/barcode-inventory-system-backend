@@ -39,8 +39,8 @@ The schema keeps product/component catalog codes separate from scanned barcodes.
 
 ## Run locally
 
-1. Copy `.env.example` to `.env` and set `DATABASE_URL`.
-2. Create the PostgreSQL database named in `DATABASE_URL`.
+1. Copy `.env.example` to `.env` and set `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD` (or set `DATABASE_URL`).
+2. Create the PostgreSQL database named in `DB_NAME` or `DATABASE_URL`.
 3. Run `npm run db:setup` to initialize the schema and local operator.
 4. Run `npm run dev` in the backend folder.
 5. Copy the frontend's `.env.local.example` to `.env.local`, then run `npm run dev` in the frontend folder.

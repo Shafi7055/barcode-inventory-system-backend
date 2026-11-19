@@ -2,13 +2,9 @@ require("dotenv").config();
 
 const fs = require("node:fs/promises");
 const path = require("node:path");
-const { Pool } = require("pg");
+const { pool } = require("./db");
 
 async function setupDatabase() {
-  if (!process.env.DATABASE_URL) {
-    throw new Error("DATABASE_URL must be set before initializing the database.");
-  }
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   try {
     const schema = await fs.readFile(path.join(__dirname, "schema.sql"), "utf8");
     await pool.query(schema);
