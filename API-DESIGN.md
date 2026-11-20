@@ -2,11 +2,13 @@
 
 The versioned API under `/api/v1` connects the local Next.js frontend to PostgreSQL. The machine-readable endpoint contract is [`openapi.json`](./openapi.json).
 
+The full assignment scope, role matrix, workflows, and current feature status are documented in the frontend's [project feature specification](../barcode-inventory-system/PROJECT-FEATURES.md).
+
 ## Local-only operation
 
 This API intentionally has no login, sessions, or role checks. It binds to `127.0.0.1` and refuses to start with `NODE_ENV=production`. Do not expose it to a network, deploy it, or use it for sensitive production data. CORS is not authentication.
 
-All writes are attributed to a single `Local operator` audit actor. The database setup removes password, email, username, and role data, anonymizes old user names, and drops the roles table while retaining inventory history.
+All writes are attributed to a single `Local operator` audit actor. The API uses the isolated PostgreSQL schema `barcode_inventory`, leaving existing objects in `public` untouched. When the known legacy inventory schema is present, `npm run db:setup` copies catalog, inventory, and audit history into the API schema in one transaction. It copies user display names for historical attribution but does not copy credentials, email addresses, or roles. The original tables and all their data remain in `public`.
 
 ## Integration conventions
 
@@ -41,6 +43,6 @@ The schema keeps product/component catalog codes separate from scanned barcodes.
 
 1. Copy `.env.example` to `.env` and set `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD` (or set `DATABASE_URL`).
 2. Create the PostgreSQL database named in `DB_NAME` or `DATABASE_URL`.
-3. Run `npm run db:setup` to initialize the schema and local operator.
+3. Run `npm run db:setup` to initialize the isolated schema and local operator. Existing legacy inventory data is imported without modifying its source tables.
 4. Run `npm run dev` in the backend folder.
 5. Copy the frontend's `.env.local.example` to `.env.local`, then run `npm run dev` in the frontend folder.

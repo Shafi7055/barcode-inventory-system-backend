@@ -1,21 +1,12 @@
+CREATE SCHEMA IF NOT EXISTS barcode_inventory;
+SET search_path TO barcode_inventory;
+
 CREATE TABLE IF NOT EXISTS users (
   user_id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
   is_system BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
-ALTER TABLE users ADD COLUMN IF NOT EXISTS name TEXT;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS is_system BOOLEAN NOT NULL DEFAULT FALSE;
-UPDATE users SET name = 'Local operator', is_system = FALSE WHERE is_system = FALSE;
-ALTER TABLE users ALTER COLUMN name SET NOT NULL;
-
-ALTER TABLE users DROP COLUMN IF EXISTS password_hash;
-ALTER TABLE users DROP COLUMN IF EXISTS role_id;
-ALTER TABLE users DROP COLUMN IF EXISTS email;
-ALTER TABLE users DROP COLUMN IF EXISTS username;
-ALTER TABLE users DROP COLUMN IF EXISTS is_active;
-DROP TABLE IF EXISTS roles;
 
 CREATE UNIQUE INDEX IF NOT EXISTS users_one_system_actor
   ON users(is_system)
@@ -121,4 +112,14 @@ CREATE TABLE IF NOT EXISTS idempotency_records (
   response_body JSONB NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (user_id, idempotency_key)
+);
+
+CREATE TABLE IF NOT EXISTS legacy_user_map (
+  legacy_user_id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL UNIQUE REFERENCES users(user_id)
+);
+
+CREATE TABLE IF NOT EXISTS schema_migrations (
+  migration_name TEXT PRIMARY KEY,
+  applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

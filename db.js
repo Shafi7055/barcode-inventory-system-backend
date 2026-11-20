@@ -1,10 +1,15 @@
-require("dotenv").config();
+import "dotenv/config";
 
-const { Pool } = require("pg");
+import pg from "pg";
+
+const { Pool } = pg;
 
 function getDatabaseConfig() {
   if (process.env.DATABASE_URL) {
-    return { connectionString: process.env.DATABASE_URL };
+    return {
+      connectionString: process.env.DATABASE_URL,
+      options: "-c search_path=barcode_inventory",
+    };
   }
 
   const required = ["DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD"];
@@ -19,9 +24,10 @@ function getDatabaseConfig() {
     database: process.env.DB_NAME,
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
+    options: "-c search_path=barcode_inventory",
   };
 }
 
 const pool = new Pool(getDatabaseConfig());
 
-module.exports = { pool };
+export { pool };
