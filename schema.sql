@@ -1,12 +1,42 @@
 CREATE SCHEMA IF NOT EXISTS barcode_inventory;
 SET search_path TO barcode_inventory;
 
+CREATE TABLE IF NOT EXISTS roles (
+  role_id SERIAL PRIMARY KEY,
+  role_name TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO roles (role_name)
+VALUES
+  ('Admin'),
+  ('Component Tracker'),
+  ('Receive User'),
+  ('Delivery User'),
+  ('Report Viewer')
+ON CONFLICT (role_name) DO NOTHING;
+
 CREATE TABLE IF NOT EXISTS users (
   user_id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
+  username TEXT,
+  password_hash TEXT,
+  role_id INTEGER REFERENCES roles(role_id),
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
   is_system BOOLEAN NOT NULL DEFAULT FALSE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS role_id INTEGER REFERENCES roles(role_id);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+CREATE UNIQUE INDEX IF NOT EXISTS users_username_unique
+  ON users (LOWER(username))
+  WHERE username IS NOT NULL;
 
 CREATE UNIQUE INDEX IF NOT EXISTS users_one_system_actor
   ON users(is_system)
@@ -15,6 +45,13 @@ CREATE UNIQUE INDEX IF NOT EXISTS users_one_system_actor
 INSERT INTO users (name, is_system)
 SELECT 'Local operator', TRUE
 WHERE NOT EXISTS (SELECT 1 FROM users WHERE is_system = TRUE);
+
+CREATE TABLE IF NOT EXISTS auth_sessions (
+  session_hash TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
 CREATE TABLE IF NOT EXISTS products (
   product_id SERIAL PRIMARY KEY,

@@ -1,6 +1,6 @@
 # Barcode Inventory API
 
-Express API for local development with the Next.js frontend. It has no authentication and binds only to `127.0.0.1`; it must not be deployed or exposed to a network. See [`API-DESIGN.md`](./API-DESIGN.md) and [`openapi.json`](./openapi.json) for the endpoint contract.
+Express API for the Next.js frontend with PostgreSQL-backed login, sessions, and role authorization. It binds only to `127.0.0.1` and remains for local development; see [`API-DESIGN.md`](./API-DESIGN.md) and [`openapi.json`](./openapi.json) for the endpoint contract.
 
 ## Requirements
 
@@ -11,22 +11,22 @@ Express API for local development with the Next.js frontend. It has no authentic
 
 1. Copy `.env.example` to `.env` and configure `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD` (or set `DATABASE_URL`).
 2. Create the PostgreSQL database named in `DB_NAME` or `DATABASE_URL`.
-3. Run `npm install`, then `npm run db:setup`. The API creates its tables in the isolated `barcode_inventory` schema. If the known legacy inventory tables are present in `public`, setup copies their inventory and history into the API schema in one transaction and leaves the originals unchanged.
-4. Run `npm run dev`; the API listens on port 4000 by default.
-5. In the frontend, copy `.env.local.example` to `.env.local` and run its `npm run dev`.
+3. Run `npm install`, then `npm run db:setup`. The API creates its tables in the isolated `barcode_inventory` schema and preserves the `public` schema. Known legacy inventory and account records are imported without changing source data or password hashes.
+4. If the database has no imported active Admin, set `BOOTSTRAP_ADMIN_USERNAME` and a private `BOOTSTRAP_ADMIN_PASSWORD` of at least 12 characters in `.env` before setup. No default credentials are created.
+5. Run `npm run dev`; the API listens on port 4001 by default.
+6. In the frontend, copy `.env.local.example` to `.env.local` and run `npm run dev -- --port 3002`.
 
 ## Routes
 
-All application routes are under `/api/v1`. `GET /health` checks the database connection. Requests are restricted by CORS to `FRONTEND_ORIGIN`; this is not authentication or a substitute for access control.
+All application routes are under `/api/v1`. `GET /health` checks the database connection. Sign-in sets an HttpOnly, SameSite session cookie; the API reloads each user's active state and role for protected requests. Registration is limited to the read-only Report Viewer role. Admins create and manage operational accounts through the users API.
 
 ## Server structure
 
 - `index.js` is the process entry point; `src/app.js` configures Express middleware and mounts the API.
 - `src/routes/` maps HTTP routes to controllers.
-- `src/controllers/` handles dashboard, catalog, inventory, and report requests.
+- `src/controllers/` handles authentication, user management, dashboard, catalog, inventory, and report requests.
 - `src/services/` contains shared transactional inventory operations.
-- `src/middleware/` contains request IDs, the local audit actor, and error handling.
+- `src/middleware/` contains session authentication, permission checks, request IDs, and error handling.
 - `src/utils/` contains validation and pagination helpers.
 - `db.js` owns the PostgreSQL connection pool.
 
-The current local API has no login or role authorization. This refactor keeps that behavior unchanged.

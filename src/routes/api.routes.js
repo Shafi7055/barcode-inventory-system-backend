@@ -20,23 +20,27 @@ import {
   stockDetails,
   summary,
 } from "../controllers/reports.controller.js";
+import {
+  requirePermission,
+  requireStockPointRead,
+} from "../middleware/auth.js";
 
 const apiRouter = Router();
 
-apiRouter.get("/dashboard", getDashboard);
-apiRouter.get("/products", listProducts);
-apiRouter.post("/products", createProduct);
-apiRouter.get("/components", listComponents);
-apiRouter.post("/components", createComponent);
-apiRouter.get("/stock-points", listStockPoints);
-apiRouter.post("/stock-points", createStockPoint);
-apiRouter.post("/component-tracking", trackComponent);
-apiRouter.post("/receipts", receiveStock);
-apiRouter.post("/deliveries", deliverStock);
-apiRouter.post("/transactions/:transactionId/reversals", reverseTransaction);
-apiRouter.get("/reports/stock-details", stockDetails);
-apiRouter.get("/reports/summary", summary);
-apiRouter.get("/reports/barcode-history", barcodeHistory);
-apiRouter.get("/audit-logs", auditLogs);
+apiRouter.get("/dashboard", requirePermission("dashboard:read"), getDashboard);
+apiRouter.get("/products", requirePermission("products:read"), listProducts);
+apiRouter.post("/products", requirePermission("master-data:write"), createProduct);
+apiRouter.get("/components", requirePermission("components:read"), listComponents);
+apiRouter.post("/components", requirePermission("master-data:write"), createComponent);
+apiRouter.get("/stock-points", requireStockPointRead, listStockPoints);
+apiRouter.post("/stock-points", requirePermission("master-data:write"), createStockPoint);
+apiRouter.post("/component-tracking", requirePermission("component-tracking"), trackComponent);
+apiRouter.post("/receipts", requirePermission("receipts"), receiveStock);
+apiRouter.post("/deliveries", requirePermission("deliveries"), deliverStock);
+apiRouter.post("/transactions/:transactionId/reversals", requirePermission("transactions:reverse"), reverseTransaction);
+apiRouter.get("/reports/stock-details", requirePermission("reports:read"), stockDetails);
+apiRouter.get("/reports/summary", requirePermission("reports:read"), summary);
+apiRouter.get("/reports/barcode-history", requirePermission("reports:read"), barcodeHistory);
+apiRouter.get("/audit-logs", requirePermission("audit:read"), auditLogs);
 
 export { apiRouter };

@@ -3,15 +3,23 @@
   "info": {
     "title": "Barcode Inventory API",
     "version": "1.0.0",
-    "description": "Local-development REST contract. The API has no authentication and must not be exposed to a network."
+    "description": "Local-development REST contract with cookie-based sessions and server-enforced role authorization. The API must not be exposed to a network."
   },
   "servers": [
     {
-      "url": "http://127.0.0.1:4000/api/v1",
+      "url": "http://127.0.0.1:4001/api/v1",
       "description": "Local development"
     }
   ],
+  "security": [
+    {
+      "sessionCookie": []
+    }
+  ],
   "tags": [
+    {
+      "name": "Authentication"
+    },
     {
       "name": "Dashboard"
     },
@@ -29,6 +37,163 @@
     }
   ],
   "paths": {
+    "/auth/login": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Sign in and create a session",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["username", "password"],
+                "properties": {
+                  "username": {"type": "string"},
+                  "password": {"type": "string", "format": "password"}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {"description": "Signed in; sets an HttpOnly session cookie"},
+          "401": {"description": "Invalid credentials"}
+        }
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Register a read-only Report Viewer",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "username", "password"],
+                "properties": {
+                  "name": {"type": "string"},
+                  "username": {"type": "string"},
+                  "password": {"type": "string", "format": "password", "minLength": 12}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {"description": "Report Viewer account created"},
+          "409": {"$ref": "#/components/responses/Conflict"},
+          "422": {"$ref": "#/components/responses/ValidationError"}
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Revoke the current session",
+        "responses": {"204": {"description": "Signed out"}}
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "tags": ["Authentication"],
+        "summary": "Get the signed-in user and role",
+        "responses": {"200": {"description": "Current account"}}
+      }
+    },
+    "/auth/password": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Change the current account password and revoke sessions",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["currentPassword", "newPassword"],
+                "properties": {
+                  "currentPassword": {"type": "string", "format": "password"},
+                  "newPassword": {"type": "string", "format": "password", "minLength": 12}
+                }
+              }
+            }
+          }
+        },
+        "responses": {"204": {"description": "Password changed"}}
+      }
+    },
+    "/users": {
+      "get": {
+        "tags": ["Administration"],
+        "summary": "List users (Admin)",
+        "responses": {"200": {"description": "User accounts"}}
+      },
+      "post": {
+        "tags": ["Administration"],
+        "summary": "Create a user (Admin)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name", "username", "password", "role"],
+                "properties": {
+                  "name": {"type": "string"},
+                  "username": {"type": "string"},
+                  "password": {"type": "string", "format": "password", "minLength": 12},
+                  "role": {"type": "string", "enum": ["Admin", "Component Tracker", "Receive User", "Delivery User", "Report Viewer"]}
+                }
+              }
+            }
+          }
+        },
+        "responses": {"201": {"description": "User created"}}
+      }
+    },
+    "/users/roles": {
+      "get": {
+        "tags": ["Administration"],
+        "summary": "List the fixed user roles (Admin)",
+        "responses": {"200": {"description": "Available roles"}}
+      }
+    },
+    "/users/{userId}": {
+      "patch": {
+        "tags": ["Administration"],
+        "summary": "Update a user role, active state, name, or password (Admin)",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "integer", "minimum": 1}
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {"type": "string"},
+                  "role": {"type": "string", "enum": ["Admin", "Component Tracker", "Receive User", "Delivery User", "Report Viewer"]},
+                  "isActive": {"type": "boolean"},
+                  "password": {"type": "string", "format": "password", "minLength": 12}
+                }
+              }
+            }
+          }
+        },
+        "responses": {"200": {"description": "User updated"}}
+      }
+    },
     "/dashboard": {
       "get": {
         "tags": [
@@ -891,6 +1056,13 @@
     }
   },
   "components": {
+    "securitySchemes": {
+      "sessionCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "inventory_session"
+      }
+    },
     "parameters": {
       "Page": {
         "name": "page",

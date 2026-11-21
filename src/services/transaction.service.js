@@ -3,11 +3,11 @@ import { pool } from "../../db.js";
 import { ApiError } from "../errors/api-error.js";
 import { requiredString } from "../utils/validation.js";
 
-async function writeAudit(client, userId, action, tableName, newValue) {
+async function writeAudit(client, userId, action, tableName, newValue, oldValue = null) {
   await client.query(
-    `INSERT INTO audit_logs (user_id, action, table_name, new_value)
-     VALUES ($1, $2, $3, $4)`,
-    [userId, action, tableName, newValue],
+    `INSERT INTO audit_logs (user_id, action, table_name, new_value, old_value)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [userId, action, tableName, newValue, oldValue],
   );
 }
 

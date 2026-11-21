@@ -1,4 +1,5 @@
 const MIGRATION_NAME = "import-public-inventory-v1";
+const AUTH_MIGRATION_NAME = "import-public-auth-v1";
 const LEGACY_TABLES = [
   "products",
   "components",
@@ -219,4 +220,80 @@ async function importLegacyData(client) {
   }
 }
 
-export { importLegacyData };
+async function importLegacyAccounts(client) {
+  const result = await client.query(
+    `SELECT table_name FROM information_schema.tables
+     WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+       AND table_name = ANY($1::text[])`,
+    [["users", "roles"]],
+  );
+  const tables = new Set(result.rows.map((row) => row.table_name));
+  if (!tables.size) return false;
+  if (!tables.has("users") || !tables.has("roles")) {
+    throw new Error("Legacy authentication schema is incomplete; public.users and public.roles are both required.");
+  }
+
+  const applied = await client.query(
+    "SELECT 1 FROM schema_migrations WHERE migration_name = $1",
+    [AUTH_MIGRATION_NAME],
+  );
+  if (applied.rowCount) return false;
+
+  const invalidAccounts = await client.query(
+    `SELECT COUNT(*)::integer AS total
+     FROM public.users u
+     LEFT JOIN legacy_user_map m ON m.legacy_user_id = u.id
+     LEFT JOIN public.roles old_role ON old_role.id = u.role_id
+     LEFT JOIN roles new_role ON LOWER(new_role.role_name) = LOWER(old_role.name)
+     WHERE m.user_id IS NULL OR new_role.role_id IS NULL
+        OR u.username IS NULL OR BTRIM(u.username) = ''
+        OR LENGTH(BTRIM(u.username)) > 64 OR u.password_hash IS NULL`,
+  );
+  if (invalidAccounts.rows[0].total) {
+    throw new Error("Legacy accounts contain missing mappings, usernames, password hashes, or unsupported roles.");
+  }
+
+  const duplicateUsernames = await client.query(
+    `SELECT COUNT(*)::integer AS total
+     FROM (
+       SELECT LOWER(BTRIM(username))
+       FROM public.users
+       GROUP BY LOWER(BTRIM(username))
+       HAVING COUNT(*) > 1
+     ) duplicates`,
+  );
+  if (duplicateUsernames.rows[0].total) {
+    throw new Error("Legacy accounts contain duplicate usernames and cannot be imported safely.");
+  }
+
+  await client.query("BEGIN");
+  try {
+    const imported = await client.query(
+      `UPDATE users target
+       SET username = LOWER(BTRIM(source.username)),
+           password_hash = source.password_hash,
+           role_id = new_role.role_id,
+           is_active = source.is_active,
+           updated_at = source.updated_at
+       FROM legacy_user_map user_map
+       JOIN public.users source ON source.id = user_map.legacy_user_id
+       JOIN public.roles old_role ON old_role.id = source.role_id
+       JOIN roles new_role ON LOWER(new_role.role_name) = LOWER(old_role.name)
+       WHERE target.user_id = user_map.user_id`,
+    );
+    if (imported.rowCount !== Number((await client.query("SELECT COUNT(*) AS total FROM public.users")).rows[0].total)) {
+      throw new Error("Not all legacy accounts could be imported.");
+    }
+    await client.query(
+      "INSERT INTO schema_migrations (migration_name) VALUES ($1)",
+      [AUTH_MIGRATION_NAME],
+    );
+    await client.query("COMMIT");
+    return true;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  }
+}
+
+export { importLegacyAccounts, importLegacyData };
