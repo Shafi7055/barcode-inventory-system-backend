@@ -3,7 +3,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import bcrypt from "bcryptjs";
 import { pool } from "./db.js";
-import { importLegacyAccounts, importLegacyData } from "./migrate-legacy.js";
 
 const directory = path.dirname(fileURLToPath(import.meta.url));
 
@@ -44,12 +43,6 @@ async function setupDatabase() {
     const schema = await fs.readFile(path.join(directory, "schema.sql"), "utf8");
     await client.query(schema);
     console.log("Database schema is ready for local development.");
-    if (await importLegacyData(client)) {
-      console.log("Legacy inventory data was copied into the API schema; source tables were left unchanged.");
-    }
-    if (await importLegacyAccounts(client)) {
-      console.log("Legacy accounts and roles were copied without changing source credentials.");
-    }
     await ensureBootstrapAdmin(client);
   } finally {
     client.release();

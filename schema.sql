@@ -151,12 +151,3 @@ CREATE TABLE IF NOT EXISTS idempotency_records (
   PRIMARY KEY (user_id, idempotency_key)
 );
 
-CREATE TABLE IF NOT EXISTS legacy_user_map (
-  legacy_user_id INTEGER PRIMARY KEY,
-  user_id INTEGER NOT NULL UNIQUE REFERENCES users(user_id)
-);
-
-CREATE TABLE IF NOT EXISTS schema_migrations (
-  migration_name TEXT PRIMARY KEY,
-  applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
