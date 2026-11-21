@@ -69,7 +69,7 @@ async function listStockPoints(req, res) {
   }
   const result = await pool.query(
     `SELECT point_id AS id, point_name AS name, point_type AS type, is_active AS "isActive"
-     FROM stock_points WHERE point_type = $1 AND is_active = TRUE ORDER BY point_name`,
+     FROM points WHERE point_type = $1 AND is_active = TRUE ORDER BY point_name`,
     [type],
   );
   res.json({ data: result.rows });
@@ -83,12 +83,12 @@ async function createStockPoint(req, res) {
   }
   const point = await inTransaction(async (client) => {
     const result = await client.query(
-      `INSERT INTO stock_points (point_name, point_type)
+      `INSERT INTO points (point_name, point_type)
        VALUES ($1, $2)
        RETURNING point_id AS id, point_name AS name, point_type AS type, is_active AS "isActive"`,
       [name, type],
     );
-    await writeAudit(client, req.actor.id, "CREATE", "stock_points", result.rows[0]);
+    await writeAudit(client, req.actor.id, "CREATE", "points", result.rows[0]);
     return result.rows[0];
   });
   res.status(201).json({ data: point });

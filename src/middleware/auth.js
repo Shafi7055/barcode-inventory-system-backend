@@ -1,7 +1,8 @@
-import { createHash } from "node:crypto";
+import { createHmac } from "node:crypto";
 import { pool } from "../../db.js";
 import { ApiError } from "../errors/api-error.js";
 import { permissionsForRole } from "../auth/roles.js";
+import { verifySessionToken } from "../controllers/auth.controller.js";
 
 const SESSION_COOKIE = "inventory_session";
 
@@ -12,24 +13,32 @@ function sessionToken(req) {
   return entry ? entry.slice(SESSION_COOKIE.length + 1) : null;
 }
 
-function hashSession(token) {
-  return createHash("sha256").update(token).digest("hex");
+function sessionSecret() {
+  return process.env.SESSION_SECRET || "local-development-session-secret-change-me";
 }
 
 function requireAuth(req, _res, next) {
   const token = sessionToken(req);
   if (!token) return next(new ApiError(401, "UNAUTHENTICATED", "Sign in to continue."));
 
+  const session = verifySessionToken(token);
+  if (!session) return next(new ApiError(401, "UNAUTHENTICATED", "Your session has expired. Sign in again."));
+
   pool.query(
-    `SELECT u.user_id AS id, u.name, u.username, r.role_name AS role
-     FROM auth_sessions s
-     JOIN users u ON u.user_id = s.user_id
+    `SELECT u.user_id AS id, u.name, u.username, u.password_hash, r.role_name AS role
+     FROM users u
      JOIN roles r ON r.role_id = u.role_id
-     WHERE s.session_hash = $1 AND s.expires_at > NOW() AND u.is_active = TRUE`,
-    [hashSession(token)],
+     WHERE u.user_id = $1 AND u.is_active = TRUE`,
+    [session.userId],
   ).then((result) => {
     if (!result.rowCount) throw new ApiError(401, "UNAUTHENTICATED", "Your session has expired. Sign in again.");
     const user = result.rows[0];
+    const passwordVersion = createHmac("sha256", sessionSecret())
+      .update(user.password_hash || "")
+      .digest("base64url");
+    if (passwordVersion !== session.passwordVersion) {
+      throw new ApiError(401, "UNAUTHENTICATED", "Your session is no longer valid. Sign in again.");
+    }
     req.actor = { ...user, permissions: permissionsForRole(user.role) };
     next();
   }).catch(next);

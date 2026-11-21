@@ -28,7 +28,7 @@ All writes are attributed to the authenticated user. Login, logout, registration
 - Send and receive JSON using `Content-Type: application/json`.
 - Lists use `{ "data": [...], "meta": { "page", "pageSize", "totalItems", "totalPages" } }`. Defaults are page 1 and 25 items; maximum page size is 100.
 - Errors use `{ "error": { "code", "message", "requestId", "details" } }`. Show field-level `details` for `422`; do not treat an error response as a successful empty result.
-- Inventory writes (`/receipts`, `/deliveries`, and reversals) require an `Idempotency-Key` for each user action. The service applies inventory changes and transaction records atomically.
+- Inventory writes (`/receipts`, `/deliveries`, and reversals) use database transactions. An optional `Idempotency-Key` serializes concurrent writes by user and key.
 - Timestamps are ISO 8601 UTC. Summary dates are inclusive calendar dates; use `timeZone` for a business-local day.
 
 ## Frontend screen mapping

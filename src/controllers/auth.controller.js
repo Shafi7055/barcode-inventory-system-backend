@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { pool } from "../../db.js";
 import { ApiError } from "../errors/api-error.js";
@@ -18,15 +18,30 @@ function cookieOptions() {
   };
 }
 
-function getSessionToken(req) {
-  const cookies = req.get("Cookie") || "";
-  const entry = cookies.split(";").map((cookie) => cookie.trim())
-    .find((cookie) => cookie.startsWith(`${SESSION_COOKIE}=`));
-  return entry ? entry.slice(SESSION_COOKIE.length + 1) : null;
+function sessionSecret() {
+  return process.env.SESSION_SECRET || "local-development-session-secret-change-me";
 }
 
-function hashSession(token) {
-  return createHash("sha256").update(token).digest("hex");
+function signSession(payload) {
+  const signature = createHmac("sha256", sessionSecret()).update(payload).digest("base64url");
+  return `${payload}.${signature}`;
+}
+
+function verifySessionToken(token) {
+  const separator = token.lastIndexOf(".");
+  if (separator < 1) return null;
+  const payload = token.slice(0, separator);
+  const signature = token.slice(separator + 1);
+  const expected = createHmac("sha256", sessionSecret()).update(payload).digest("base64url");
+  const actualBuffer = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expected);
+  if (actualBuffer.length !== expectedBuffer.length || !timingSafeEqual(actualBuffer, expectedBuffer)) return null;
+  const parts = payload.split(".");
+  if (parts.length !== 3) return null;
+  const [userId, expiresAt, passwordVersion] = parts;
+  const expiry = Number(expiresAt);
+  if (!/^\d+$/.test(userId) || !Number.isFinite(expiry) || expiry <= Date.now()) return null;
+  return { userId: Number(userId), passwordVersion };
 }
 
 function safeUser(user) {
@@ -50,37 +65,18 @@ async function login(req, res) {
     throw new ApiError(401, "INVALID_CREDENTIALS", "Username or password is incorrect.");
   }
 
-  const token = randomBytes(32).toString("base64url");
-  const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
+  const passwordVersion = createHmac("sha256", sessionSecret())
+    .update(user.password_hash || "")
+    .digest("base64url");
+  const token = signSession(`${user.id}.${Date.now() + SESSION_TTL_MS}.${passwordVersion}`);
   await inTransaction(async (client) => {
-    await client.query(
-      "DELETE FROM auth_sessions WHERE expires_at <= NOW()",
-    );
-    await client.query(
-      `INSERT INTO auth_sessions (session_hash, user_id, expires_at)
-       VALUES ($1, $2, $3)`,
-      [hashSession(token), user.id, expiresAt],
-    );
-    await writeAudit(client, user.id, "LOGIN", "auth_sessions", { username: user.username });
+    await writeAudit(client, user.id, "LOGIN", "users", { username: user.username });
   });
   res.cookie(SESSION_COOKIE, token, cookieOptions());
   res.json({ data: safeUser(user) });
 }
 
 async function logout(req, res) {
-  const token = getSessionToken(req);
-  if (token) {
-    await inTransaction(async (client) => {
-      const session = await client.query(
-        "SELECT user_id FROM auth_sessions WHERE session_hash = $1",
-        [hashSession(token)],
-      );
-      await client.query("DELETE FROM auth_sessions WHERE session_hash = $1", [hashSession(token)]);
-      if (session.rowCount) {
-        await writeAudit(client, session.rows[0].user_id, "LOGOUT", "auth_sessions", {});
-      }
-    });
-  }
   res.clearCookie(SESSION_COOKIE, cookieOptions());
   res.status(204).end();
 }
@@ -110,7 +106,6 @@ async function changePassword(req, res) {
       [req.actor.id, passwordHash],
     );
     await writeAudit(client, req.actor.id, "PASSWORD_CHANGE", "users", { passwordChanged: true });
-    await client.query("DELETE FROM auth_sessions WHERE user_id = $1", [req.actor.id]);
   });
   res.clearCookie(SESSION_COOKIE, cookieOptions());
   res.status(204).end();
@@ -143,4 +138,4 @@ async function registerViewer(req, res) {
   res.status(201).json({ data: { name, username, role: "Report Viewer" } });
 }
 
-export { changePassword, currentUser, login, logout, registerViewer };
+export { changePassword, currentUser, login, logout, registerViewer, verifySessionToken };

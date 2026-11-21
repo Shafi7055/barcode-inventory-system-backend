@@ -15,7 +15,9 @@ async function listUsers(_req, res) {
 }
 
 async function listRoles(_req, res) {
-  const result = await pool.query("SELECT role_name AS name FROM roles ORDER BY role_id");
+  const result = await pool.query(
+    "SELECT role_name AS name FROM roles WHERE role_name <> 'Admin' ORDER BY role_id",
+  );
   res.json({ data: result.rows });
 }
 
@@ -28,6 +30,9 @@ async function createUser(req, res) {
   validatePassword(password);
 
   const user = await inTransaction(async (client) => {
+    if (roleName === "Admin") {
+      throw new ApiError(409, "CONFLICT", "The Admin role cannot be assigned to additional accounts.");
+    }
     const role = await findRole(client, roleName);
     const passwordHash = await bcrypt.hash(password, 12);
     const result = await client.query(
@@ -70,6 +75,9 @@ async function updateUser(req, res) {
         || (isActive === false && previous.isActive))) {
       throw new ApiError(409, "CONFLICT", "You cannot change your own role or deactivate your account.");
     }
+    if (nextRoleName === "Admin") {
+      throw new ApiError(409, "CONFLICT", "The Admin role cannot be assigned to additional accounts.");
+    }
     const nextRole = nextRoleName === undefined ? null : await findRole(client, nextRoleName);
     const resultRole = nextRole?.role_name || previous.role;
     const resultActive = isActive === undefined ? previous.isActive : isActive;
@@ -100,9 +108,6 @@ async function updateUser(req, res) {
     );
     const updatedUser = { ...updated.rows[0], role: resultRole };
     await writeAudit(client, req.actor.id, "UPDATE", "users", updatedUser, previous);
-    if (resultRole !== previous.role || !resultActive || passwordHash) {
-      await client.query("DELETE FROM auth_sessions WHERE user_id = $1", [userId]);
-    }
     return updatedUser;
   });
   res.json({ data: user });

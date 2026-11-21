@@ -10,7 +10,7 @@ async function stockDetails(req, res) {
   const search = typeof req.query.search === "string" ? `%${req.query.search.trim()}%` : null;
   const values = [status || null, search];
   const count = await pool.query(
-    `SELECT COUNT(*)::integer AS total FROM product_instances pi
+    `SELECT COUNT(*)::integer AS total FROM units pi
      JOIN products p ON p.product_id = pi.product_id
      WHERE ($1::text IS NULL OR pi.status = $1)
        AND ($2::text IS NULL OR pi.barcode ILIKE $2 OR p.product_name ILIKE $2)`,
@@ -20,9 +20,9 @@ async function stockDetails(req, res) {
     `SELECT pi.unit_id AS "unitId", pi.barcode, pi.product_id AS "productId",
             p.product_name AS "productName", pi.status, sp.point_name AS "receivePoint",
             pi.created_at AS "createdAt"
-     FROM product_instances pi
+     FROM units pi
      JOIN products p ON p.product_id = pi.product_id
-     LEFT JOIN stock_points sp ON sp.point_id = pi.receive_point_id
+     LEFT JOIN points sp ON sp.point_id = pi.receive_point_id
      WHERE ($1::text IS NULL OR pi.status = $1)
        AND ($2::text IS NULL OR pi.barcode ILIKE $2 OR p.product_name ILIKE $2)
      ORDER BY pi.created_at DESC LIMIT $3 OFFSET $4`,
@@ -42,7 +42,7 @@ async function summary(req, res) {
     `SELECT COUNT(*) FILTER (WHERE event_type = 'RECEIVED')::integer AS received,
             COUNT(*) FILTER (WHERE event_type = 'DELIVERED')::integer AS delivered,
             COUNT(*) FILTER (WHERE event_type = 'REVERSED')::integer AS reversed
-     FROM inventory_transactions
+     FROM inventory_history
      WHERE transaction_time >= (($1::date)::timestamp AT TIME ZONE $3)
        AND transaction_time < ((($2::date + 1)::timestamp) AT TIME ZONE $3)`,
     [from, to, timeZone],
@@ -52,17 +52,17 @@ async function summary(req, res) {
 
 async function barcodeHistory(req, res) {
   const barcode = requiredString(req.query.barcode, "barcode", 200);
-  const instance = await pool.query("SELECT unit_id FROM product_instances WHERE barcode = $1", [barcode]);
+  const instance = await pool.query("SELECT unit_id FROM units WHERE barcode = $1", [barcode]);
   if (!instance.rowCount) throw new ApiError(404, "NOT_FOUND", "Barcode was not found.");
   const result = await pool.query(
     `SELECT t.transaction_id AS "transactionId", pi.barcode,
             t.event_type AS "eventType", sp.point_name AS point, t.reason,
             t.original_transaction_id AS "originalTransactionId",
             t.transaction_time AS "transactionTime", u.name AS "performedBy"
-     FROM inventory_transactions t
-     JOIN product_instances pi ON pi.unit_id = t.unit_id
+     FROM inventory_history t
+     JOIN units pi ON pi.unit_id = t.unit_id
      JOIN users u ON u.user_id = t.user_id
-     LEFT JOIN stock_points sp ON sp.point_id = t.point_id
+     LEFT JOIN points sp ON sp.point_id = t.point_id
      WHERE t.unit_id = $1 ORDER BY t.transaction_time, t.transaction_id`,
     [instance.rows[0].unit_id],
   );

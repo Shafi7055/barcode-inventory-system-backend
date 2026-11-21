@@ -18,7 +18,7 @@ Express API for the Next.js frontend with PostgreSQL-backed login, sessions, and
 
 ## Routes
 
-All application routes are under `/api/v1`. `GET /health` checks the database connection. Sign-in sets an HttpOnly, SameSite session cookie; the API reloads each user's active state and role for protected requests. Registration is limited to the read-only Report Viewer role. Admins create and manage operational accounts through the users API.
+All application routes are under `/api/v1`. `GET /health` checks the database connection. Sign-in sets a signed, HttpOnly, SameSite session cookie; the API reloads each user's active state and role for protected requests without storing sessions in a database table. Registration is limited to the read-only Report Viewer role. Admins create and manage operational accounts through the users API.
 
 ## Server structure
 

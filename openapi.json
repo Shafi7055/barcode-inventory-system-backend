@@ -617,7 +617,7 @@
           "Inventory"
         ],
         "summary": "Receive an item",
-        "description": "Record a receipt and inventory transaction atomically. Accepts an Idempotency-Key header.",
+        "description": "Record a receipt and inventory transaction atomically. Accepts an optional Idempotency-Key header.",
         "parameters": [
           {
             "$ref": "#/components/parameters/IdempotencyKey"
@@ -689,7 +689,7 @@
           "Inventory"
         ],
         "summary": "Deliver an item",
-        "description": "Record a delivery and inventory transaction atomically. Accepts an Idempotency-Key header.",
+        "description": "Record a delivery and inventory transaction atomically. Accepts an optional Idempotency-Key header.",
         "parameters": [
           {
             "$ref": "#/components/parameters/IdempotencyKey"
