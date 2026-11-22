@@ -28,6 +28,8 @@ DROP TABLE IF EXISTS receipts;
 DROP TABLE IF EXISTS deliveries;
 DROP TABLE IF EXISTS auth_sessions;
 DROP TABLE IF EXISTS idempotency_records;
+DROP TABLE IF EXISTS legacy_user_map;
+DROP TABLE IF EXISTS schema_migrations;
 
 CREATE TABLE IF NOT EXISTS roles (
   role_id SERIAL PRIMARY KEY,
