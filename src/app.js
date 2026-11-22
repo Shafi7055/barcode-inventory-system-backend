@@ -13,7 +13,7 @@ const app = express();
 
 app.use(requestId);
 app.use(cors({
-  origin: (process.env.FRONTEND_ORIGIN || "http://localhost:3002").split(",").map((origin) => origin.trim()),
+  origin: (process.env.FRONTEND_ORIGIN || "http://localhost:3000").split(",").map((origin) => origin.trim()),
   credentials: true,
   methods: ["GET", "POST", "PATCH", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Idempotency-Key"],

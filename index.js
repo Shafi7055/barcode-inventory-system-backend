@@ -2,7 +2,7 @@ import { pathToFileURL } from "node:url";
 import { pool } from "./db.js";
 import { app } from "./src/app.js";
 
-const PORT = Number(process.env.PORT) || 4001;
+const PORT = Number(process.env.PORT) || 4000;
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   if (process.env.NODE_ENV === "production") {

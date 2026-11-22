@@ -22,8 +22,9 @@ All writes are attributed to the authenticated user. Login, logout, registration
 
 ## Integration conventions
 
-- Frontend API base: same-origin `/api/v1`, rewritten to `API_SERVER_ORIGIN` (default `http://127.0.0.1:4001`).
-- Backend port: `4001` by default; set `FRONTEND_ORIGIN` to the frontend origin, such as `http://localhost:3002`.
+- Frontend API base: same-origin `/api/v1`, rewritten to `API_SERVER_ORIGIN` (default `http://127.0.0.1:4000`).
+- Frontend port: `3000` by default; backend HTTP port: `4000` by default. Set `FRONTEND_ORIGIN` to `http://localhost:3000`.
+- PostgreSQL port: configure separately with `DB_PORT` (commonly `5432`); this is not the backend HTTP `PORT`.
 - Session: send the HttpOnly cookie set by login; the frontend's same-origin API proxy forwards it automatically.
 - Send and receive JSON using `Content-Type: application/json`.
 - Lists use `{ "data": [...], "meta": { "page", "pageSize", "totalItems", "totalPages" } }`. Defaults are page 1 and 25 items; maximum page size is 100.
@@ -60,4 +61,4 @@ The schema keeps product/component catalog codes separate from scanned barcodes.
 2. Create the PostgreSQL database named in `DB_NAME` or `DATABASE_URL`.
 3. Run `npm run db:setup` to initialize the isolated schema. Set bootstrap Admin variables only when no active Admin is imported.
 4. Run `npm run dev` in the backend folder.
-5. Copy the frontend's `.env.local.example` to `.env.local`, then run `npm run dev -- --port 3002` in the frontend folder.
+5. Copy the frontend's `.env.local.example` to `.env.local`, then run `npm run dev` in the frontend folder.
