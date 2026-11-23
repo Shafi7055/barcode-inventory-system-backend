@@ -2,6 +2,17 @@ import { pool } from "../../db.js";
 import { ApiError } from "../errors/api-error.js";
 import { requiredString } from "../utils/validation.js";
 
+const MOVEMENT_SELECT = `SELECT t.transaction_id AS "transactionId", pi.barcode,
+                               t.event_type AS "eventType", c.component_name AS component,
+                               sp.point_name AS point, t.reason,
+                               t.original_transaction_id AS "originalTransactionId",
+                               t.transaction_time AS "transactionTime", u.name AS "performedBy"
+                        FROM inventory_history t
+                        JOIN units pi ON pi.unit_id = t.unit_id
+                        JOIN users u ON u.user_id = t.user_id
+                        LEFT JOIN points sp ON sp.point_id = t.point_id
+                        LEFT JOIN components c ON c.component_id = t.component_id`;
+
 async function writeAudit(client, userId, action, tableName, newValue, oldValue = null) {
   await client.query(
     `INSERT INTO audit_logs (user_id, action, table_name, new_value, old_value)
@@ -44,15 +55,7 @@ async function idempotentWrite(req, status, work) {
 
 async function getMovement(client, transactionId) {
   const result = await client.query(
-    `SELECT t.transaction_id AS "transactionId", pi.barcode,
-            t.event_type AS "eventType", sp.point_name AS point, t.reason,
-            t.original_transaction_id AS "originalTransactionId",
-            t.transaction_time AS "transactionTime", u.name AS "performedBy"
-     FROM inventory_history t
-     JOIN units pi ON pi.unit_id = t.unit_id
-     JOIN users u ON u.user_id = t.user_id
-     LEFT JOIN points sp ON sp.point_id = t.point_id
-     WHERE t.transaction_id = $1`,
+    `${MOVEMENT_SELECT} WHERE t.transaction_id = $1`,
     [transactionId],
   );
   return result.rows[0];
@@ -66,4 +69,4 @@ async function validateStockPoint(client, pointId, type) {
   if (!result.rowCount) throw new ApiError(404, "NOT_FOUND", `Active ${type.toLowerCase()} point not found.`);
 }
 
-export { getMovement, idempotentWrite, inTransaction, validateStockPoint, writeAudit };
+export { getMovement, idempotentWrite, inTransaction, MOVEMENT_SELECT, validateStockPoint, writeAudit };

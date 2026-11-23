@@ -24,6 +24,9 @@
       "name": "Dashboard"
     },
     {
+      "name": "Activity"
+    },
+    {
       "name": "Inventory"
     },
     {
@@ -248,6 +251,69 @@
         }
       }
     },
+    "/activity/tracked-products": {
+      "get": {
+        "tags": ["Activity"],
+        "summary": "List tracked products",
+        "description": "Admin sees all tracked products. Component Trackers see only products they tracked.",
+        "parameters": [
+          {"$ref": "#/components/parameters/Page"},
+          {"$ref": "#/components/parameters/PageSize"}
+        ],
+        "responses": {
+          "200": {
+            "description": "Tracked product activity page",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/TrackedProductPage"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/activity/received-products": {
+      "get": {
+        "tags": ["Activity"],
+        "summary": "List received products",
+        "description": "Admin sees all received products. Receive Users see only products they received.",
+        "parameters": [
+          {"$ref": "#/components/parameters/Page"},
+          {"$ref": "#/components/parameters/PageSize"}
+        ],
+        "responses": {
+          "200": {
+            "description": "Received product activity page",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/ReceivedProductPage"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/activity/delivered-products": {
+      "get": {
+        "tags": ["Activity"],
+        "summary": "List delivered products",
+        "description": "Admin sees all delivered products. Delivery Users see only products they delivered.",
+        "parameters": [
+          {"$ref": "#/components/parameters/Page"},
+          {"$ref": "#/components/parameters/PageSize"}
+        ],
+        "responses": {
+          "200": {
+            "description": "Delivered product activity page",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/DeliveredProductPage"}
+              }
+            }
+          }
+        }
+      }
+    },
     "/products": {
       "get": {
         "tags": [
@@ -332,6 +398,45 @@
           "422": {
             "$ref": "#/components/responses/ValidationError"
           }
+        }
+      }
+    },
+    "/products/{productId}/required-components": {
+      "put": {
+        "tags": ["Master data"],
+        "summary": "Set a product's required components",
+        "description": "Admin-only configuration. Required component codes are used to validate unit tracking, receiving, and delivery.",
+        "parameters": [
+          {
+            "name": "productId",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "integer", "minimum": 1}
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["componentCodes"],
+                "properties": {
+                  "componentCodes": {
+                    "type": "array",
+                    "minItems": 1,
+                    "uniqueItems": true,
+                    "items": {"type": "string"}
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {"description": "Required components updated"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "422": {"$ref": "#/components/responses/ValidationError"}
         }
       }
     },
@@ -618,8 +723,8 @@
         "tags": [
           "Inventory"
         ],
-        "summary": "Receive an item",
-        "description": "Record a receipt and inventory transaction atomically. Accepts an optional Idempotency-Key header.",
+        "summary": "Receive a component for a product unit",
+        "description": "Accepts a product unit barcode and one associated component barcode. The unit becomes IN_STOCK only after every required component is received. Accepts an optional Idempotency-Key header.",
         "parameters": [
           {
             "$ref": "#/components/parameters/IdempotencyKey"
@@ -632,23 +737,24 @@
               "schema": {
                 "type": "object",
                 "required": [
-                  "barcode",
+                  "productBarcode",
+                  "componentBarcode",
                   "pointId"
                 ],
                 "properties": {
-                  "barcode": {
+                  "productBarcode": {
                     "type": "string",
                     "pattern": "^[A-Z]{3}-[0-9]{8}$",
                     "example": "FRG-00000120"
                   },
+                  "componentBarcode": {
+                    "type": "string",
+                    "pattern": "^[A-Z]{3}-[A-Z]{3}-[0-9]{8}$",
+                    "example": "FRG-CMP-00000120"
+                  },
                   "pointId": {
                     "type": "integer",
                     "minimum": 1
-                  },
-                  "productId": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Optional legacy compatibility field; product is determined from the registered unit."
                   }
                 }
               }
@@ -657,7 +763,7 @@
         },
         "responses": {
           "201": {
-            "description": "Receipt recorded",
+            "description": "Component receipt and progress recorded",
             "content": {
               "application/json": {
                 "schema": {
@@ -667,7 +773,7 @@
                   ],
                   "properties": {
                     "data": {
-                      "$ref": "#/components/schemas/Movement"
+                    "$ref": "#/components/schemas/ComponentReceiptProgress"
                     }
                   }
                 }
@@ -691,8 +797,8 @@
         "tags": [
           "Inventory"
         ],
-        "summary": "Deliver an item",
-        "description": "Record a delivery and inventory transaction atomically. Accepts an optional Idempotency-Key header.",
+        "summary": "Deliver a product unit",
+        "description": "Accepts only a product unit barcode (PRD-00000001). All configured required components must be tracked and the unit must be received before delivery. Accepts an optional Idempotency-Key header.",
         "parameters": [
           {
             "$ref": "#/components/parameters/IdempotencyKey"
@@ -711,7 +817,10 @@
                 "properties": {
                   "barcode": {
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 12,
+                    "maxLength": 12,
+                    "pattern": "^[A-Z]{3}-[0-9]{8}$",
+                    "description": "Product unit barcode; component barcodes are not accepted."
                   },
                   "pointId": {
                     "type": "integer",
@@ -1155,6 +1264,10 @@
           "description": {
             "type": "string"
           },
+          "requiredComponentCodes": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
           "isActive": {
             "type": "boolean"
           },
@@ -1242,12 +1355,19 @@
             "type": "string",
             "enum": [
               "COMPONENT",
+              "COMPONENT_RECEIVED",
               "RECEIVED",
               "DELIVERED",
               "REVERSED"
             ]
           },
           "point": {
+            "type": "string"
+          },
+          "componentId": {
+            "type": "integer"
+          },
+          "component": {
             "type": "string"
           },
           "reason": {
@@ -1263,6 +1383,71 @@
           "performedBy": {
             "type": "string"
           }
+        }
+      },
+      "ComponentReceiptProgress": {
+        "type": "object",
+        "required": [
+          "productBarcode",
+          "componentBarcode",
+          "componentName",
+          "alreadyReceived",
+          "completed",
+          "receivedCount",
+          "requiredCount",
+          "missingComponents",
+          "status"
+        ],
+        "properties": {
+          "productBarcode": {"type": "string"},
+          "componentBarcode": {"type": "string"},
+          "componentName": {"type": "string"},
+          "alreadyReceived": {"type": "boolean"},
+          "completed": {"type": "boolean"},
+          "receivedCount": {"type": "integer", "minimum": 0},
+          "requiredCount": {"type": "integer", "minimum": 1},
+          "missingComponents": {"type": "array", "items": {"type": "string"}},
+          "status": {"type": "string", "enum": ["PENDING_RECEIPT", "IN_STOCK", "DELIVERED"]}
+        }
+      },
+      "TrackedProductActivity": {
+        "type": "object",
+        "required": ["unitId", "barcode", "productName", "trackedComponents", "lastTrackedAt"],
+        "properties": {
+          "unitId": {"type": "integer"},
+          "barcode": {"type": "string"},
+          "productName": {"type": "string"},
+          "trackedComponents": {"type": "integer"},
+          "lastTrackedAt": {"type": "string", "format": "date-time"},
+          "trackedBy": {"type": "string"}
+        }
+      },
+      "ReceivedProductActivity": {
+        "type": "object",
+        "required": ["id", "unitId", "barcode", "productName", "receivedAt", "status"],
+        "properties": {
+          "id": {"type": "integer"},
+          "unitId": {"type": "integer"},
+          "barcode": {"type": "string"},
+          "productName": {"type": "string"},
+          "receivePoint": {"type": "string"},
+          "receivedAt": {"type": "string", "format": "date-time"},
+          "status": {"type": "string", "enum": ["PENDING_RECEIPT", "IN_STOCK", "DELIVERED"]},
+          "receivedBy": {"type": "string"}
+        }
+      },
+      "DeliveredProductActivity": {
+        "type": "object",
+        "required": ["id", "unitId", "barcode", "productName", "deliveredAt", "status"],
+        "properties": {
+          "id": {"type": "integer"},
+          "unitId": {"type": "integer"},
+          "barcode": {"type": "string"},
+          "productName": {"type": "string"},
+          "deliveryPoint": {"type": "string"},
+          "deliveredAt": {"type": "string", "format": "date-time"},
+          "status": {"type": "string", "enum": ["PENDING_RECEIPT", "IN_STOCK", "DELIVERED"]},
+          "deliveredBy": {"type": "string"}
         }
       },
       "StockItem": {
@@ -1370,6 +1555,30 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Product"
+            }
+          },
+          "TrackedProductPage": {
+            "type": "object",
+            "required": ["data", "meta"],
+            "properties": {
+              "data": {"type": "array", "items": {"$ref": "#/components/schemas/TrackedProductActivity"}},
+              "meta": {"$ref": "#/components/schemas/PageMeta"}
+            }
+          },
+          "ReceivedProductPage": {
+            "type": "object",
+            "required": ["data", "meta"],
+            "properties": {
+              "data": {"type": "array", "items": {"$ref": "#/components/schemas/ReceivedProductActivity"}},
+              "meta": {"$ref": "#/components/schemas/PageMeta"}
+            }
+          },
+          "DeliveredProductPage": {
+            "type": "object",
+            "required": ["data", "meta"],
+            "properties": {
+              "data": {"type": "array", "items": {"$ref": "#/components/schemas/DeliveredProductActivity"}},
+              "meta": {"$ref": "#/components/schemas/PageMeta"}
             }
           },
           "meta": {

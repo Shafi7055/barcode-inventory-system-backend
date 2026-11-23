@@ -3,6 +3,7 @@ import { pool } from "../../db.js";
 import { ApiError } from "../errors/api-error.js";
 import { integer, requiredString } from "../utils/validation.js";
 import { inTransaction, writeAudit } from "../services/transaction.service.js";
+import { validatePassword, validateUsername } from "../auth/credentials.js";
 
 async function listUsers(_req, res) {
   const result = await pool.query(
@@ -111,18 +112,6 @@ async function updateUser(req, res) {
     return updatedUser;
   });
   res.json({ data: user });
-}
-
-function validateUsername(username) {
-  if (!/^[a-z0-9._-]{3,64}$/.test(username)) {
-    throw new ApiError(422, "VALIDATION_ERROR", "Username must be 3-64 letters, numbers, periods, underscores, or hyphens.");
-  }
-}
-
-function validatePassword(password) {
-  if (typeof password !== "string" || password.length < 12 || password.length > 128) {
-    throw new ApiError(422, "VALIDATION_ERROR", "Password must contain 12-128 characters.");
-  }
 }
 
 async function findRole(client, roleName) {

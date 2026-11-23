@@ -1,9 +1,10 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { pool } from "../../db.js";
 import { ApiError } from "../errors/api-error.js";
 import { requiredString } from "../utils/validation.js";
 import { inTransaction, writeAudit } from "../services/transaction.service.js";
+import { validatePassword, validateUsername } from "../auth/credentials.js";
+import { createSessionToken } from "../auth/session-token.js";
 
 const SESSION_COOKIE = "inventory_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
@@ -16,32 +17,6 @@ function cookieOptions() {
     path: "/api/v1",
     maxAge: SESSION_TTL_MS,
   };
-}
-
-function sessionSecret() {
-  return process.env.SESSION_SECRET || "local-development-session-secret-change-me";
-}
-
-function signSession(payload) {
-  const signature = createHmac("sha256", sessionSecret()).update(payload).digest("base64url");
-  return `${payload}.${signature}`;
-}
-
-function verifySessionToken(token) {
-  const separator = token.lastIndexOf(".");
-  if (separator < 1) return null;
-  const payload = token.slice(0, separator);
-  const signature = token.slice(separator + 1);
-  const expected = createHmac("sha256", sessionSecret()).update(payload).digest("base64url");
-  const actualBuffer = Buffer.from(signature);
-  const expectedBuffer = Buffer.from(expected);
-  if (actualBuffer.length !== expectedBuffer.length || !timingSafeEqual(actualBuffer, expectedBuffer)) return null;
-  const parts = payload.split(".");
-  if (parts.length !== 3) return null;
-  const [userId, expiresAt, passwordVersion] = parts;
-  const expiry = Number(expiresAt);
-  if (!/^\d+$/.test(userId) || !Number.isFinite(expiry) || expiry <= Date.now()) return null;
-  return { userId: Number(userId), passwordVersion };
 }
 
 function safeUser(user) {
@@ -65,10 +40,7 @@ async function login(req, res) {
     throw new ApiError(401, "INVALID_CREDENTIALS", "Username or password is incorrect.");
   }
 
-  const passwordVersion = createHmac("sha256", sessionSecret())
-    .update(user.password_hash || "")
-    .digest("base64url");
-  const token = signSession(`${user.id}.${Date.now() + SESSION_TTL_MS}.${passwordVersion}`);
+  const token = createSessionToken(user.id, Date.now() + SESSION_TTL_MS, user.password_hash);
   await inTransaction(async (client) => {
     await writeAudit(client, user.id, "LOGIN", "users", { username: user.username });
   });
@@ -115,12 +87,8 @@ async function registerViewer(req, res) {
   const name = requiredString(req.body?.name, "name", 200);
   const username = requiredString(req.body?.username, "username", 64).toLowerCase();
   const password = req.body?.password;
-  if (!/^[a-z0-9._-]{3,64}$/.test(username)) {
-    throw new ApiError(422, "VALIDATION_ERROR", "Username must be 3-64 letters, numbers, periods, underscores, or hyphens.");
-  }
-  if (typeof password !== "string" || password.length < 12 || password.length > 128) {
-    throw new ApiError(422, "VALIDATION_ERROR", "Password must contain 12-128 characters.");
-  }
+  validateUsername(username);
+  validatePassword(password);
   const role = await pool.query("SELECT role_id FROM roles WHERE role_name = 'Report Viewer'");
   const passwordHash = await bcrypt.hash(password, 12);
   await inTransaction(async (client) => {
@@ -138,4 +106,4 @@ async function registerViewer(req, res) {
   res.status(201).json({ data: { name, username, role: "Report Viewer" } });
 }
 
-export { changePassword, currentUser, login, logout, registerViewer, verifySessionToken };
+export { changePassword, currentUser, login, logout, registerViewer };

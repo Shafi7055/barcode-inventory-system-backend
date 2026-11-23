@@ -12,11 +12,13 @@ The fixed roles are `Admin`, `Component Tracker`, `Receive User`, `Delivery User
 
 | Role | API capabilities |
 | --- | --- |
-| Admin | Dashboard, all inventory operations, master data, reports, audit logs, user management, and reversals |
-| Component Tracker | Component tracking and component reads |
-| Receive User | Product reads, receive-point reads, and receiving |
-| Delivery User | Delivery-point reads and delivery |
+| Admin | Dashboard, all inventory operations, product component requirements, reports, audit logs, user management, and reversals |
+| Component Tracker | Component tracking, component reads, and own tracked-product activity |
+| Receive User | Product reads, receive-point reads, per-component receiving, and own received-product activity |
+| Delivery User | Delivery-point reads, delivery, and own delivered-product activity |
 | Report Viewer | Read-only reports |
+
+Activity lists are paginated. Admins can view all tracked, received, and delivered products; operational roles can view only activity attributed to their own account. The server applies this scope from the authenticated session.
 
 All writes are attributed to the authenticated user. Login, logout, registration, password changes, and user changes are recorded in the audit log.
 
@@ -40,10 +42,10 @@ All writes are attributed to the authenticated user. Login, logout, registration
 | Session / logout / password | `GET /auth/me`, `POST /auth/logout`, `POST /auth/password` |
 | User management (Admin) | `GET /users`, `GET /users/roles`, `POST /users`, `PATCH /users/{userId}` |
 | Dashboard | `GET /dashboard` |
-| Component tracking | `POST /component-tracking` (registers a pending product unit and tracks its components) |
-| Receive stock | `GET /stock-points?type=RECEIVE`, `POST /receipts` |
-| Deliver stock | `GET /stock-points?type=DELIVERY`, `POST /deliveries` |
-| Products / components | `GET` and `POST /products` or `/components` |
+| Component tracking | `POST /component-tracking`, `GET /activity/tracked-products` |
+| Receive stock | `GET /stock-points?type=RECEIVE`, `POST /receipts` (product unit + component barcode), `GET /activity/received-products` |
+| Deliver stock | `GET /stock-points?type=DELIVERY`, `POST /deliveries`, `GET /activity/delivered-products` |
+| Products / components | `GET` and `POST /products` or `/components`; `PUT /products/{productId}/required-components` |
 | Receive / delivery points | `GET` and `POST /stock-points` with the corresponding type |
 | Reversals | `POST /transactions/{transactionId}/reversals` |
 | Stock details | `GET /reports/stock-details` |
@@ -53,7 +55,7 @@ All writes are attributed to the authenticated user. Login, logout, registration
 
 ## Data model
 
-The workflow is component tracking → receiving → delivery. Component tracking registers a product unit as `PENDING_RECEIPT`; receiving requires at least one tracked component and changes it to `IN_STOCK`; delivery changes it to `DELIVERED`. Product unit barcodes use `PRD-00000001`, and component barcodes use `PRD-CMP-00000001`. Product codes and component codes are inferred from the barcode prefixes.
+The workflow is component tracking → receiving → delivery. Admins configure each product's required component codes. Receive Users scan both the product unit barcode and each associated component barcode; the unit becomes `IN_STOCK` only after every required component has been received. Delivery rechecks those receipts and reports missing component names and codes. Delivery accepts only the product unit barcode (`PRD-00000001`), never a component barcode. Component tracking registers a product unit as `PENDING_RECEIPT`; delivery changes it to `DELIVERED`. Component barcodes use `PRD-CMP-00000001`. Product codes and component codes are inferred from the barcode prefixes.
 
 ## Run locally
 

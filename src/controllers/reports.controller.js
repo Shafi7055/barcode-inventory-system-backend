@@ -2,6 +2,7 @@ import { pool } from "../../db.js";
 import { ApiError } from "../errors/api-error.js";
 import { pagedQuery } from "../utils/paged-query.js";
 import { requiredString, validatePage } from "../utils/validation.js";
+import { MOVEMENT_SELECT } from "../services/transaction.service.js";
 
 async function stockDetails(req, res) {
   const { page, pageSize, offset } = validatePage(req.query);
@@ -57,15 +58,7 @@ async function barcodeHistory(req, res) {
   const instance = await pool.query("SELECT unit_id FROM units WHERE barcode = $1", [barcode]);
   if (!instance.rowCount) throw new ApiError(404, "NOT_FOUND", "Barcode was not found.");
   const result = await pool.query(
-    `SELECT t.transaction_id AS "transactionId", pi.barcode,
-            t.event_type AS "eventType", sp.point_name AS point, t.reason,
-            t.original_transaction_id AS "originalTransactionId",
-            t.transaction_time AS "transactionTime", u.name AS "performedBy"
-     FROM inventory_history t
-     JOIN units pi ON pi.unit_id = t.unit_id
-     JOIN users u ON u.user_id = t.user_id
-     LEFT JOIN points sp ON sp.point_id = t.point_id
-     WHERE t.unit_id = $1 ORDER BY t.transaction_time, t.transaction_id`,
+    `${MOVEMENT_SELECT} WHERE t.unit_id = $1 ORDER BY t.transaction_time, t.transaction_id`,
     [instance.rows[0].unit_id],
   );
   res.json({ data: result.rows });

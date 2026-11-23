@@ -81,9 +81,13 @@ CREATE TABLE IF NOT EXISTS products (
   product_name TEXT NOT NULL,
   product_code TEXT NOT NULL UNIQUE,
   description TEXT,
+  required_component_codes TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE products
+  ADD COLUMN IF NOT EXISTS required_component_codes TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
 
 CREATE TABLE IF NOT EXISTS components (
   component_id SERIAL PRIMARY KEY,
@@ -112,22 +116,37 @@ CREATE TABLE IF NOT EXISTS units (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-ALTER TABLE units DROP CONSTRAINT IF EXISTS units_status_check;
 ALTER TABLE units DROP CONSTRAINT IF EXISTS product_instances_status_check;
-ALTER TABLE units
-  ADD CONSTRAINT units_status_check
-  CHECK (status IN ('PENDING_RECEIPT', 'IN_STOCK', 'DELIVERED'));
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conrelid = 'barcode_inventory.units'::regclass
+      AND conname = 'units_status_check'
+  ) THEN
+    ALTER TABLE units
+      ADD CONSTRAINT units_status_check
+      CHECK (status IN ('PENDING_RECEIPT', 'IN_STOCK', 'DELIVERED'));
+  END IF;
+END $$;
 ALTER TABLE units ALTER COLUMN status SET DEFAULT 'PENDING_RECEIPT';
 
 CREATE TABLE IF NOT EXISTS unit_components (
   id SERIAL PRIMARY KEY,
   unit_id INTEGER NOT NULL REFERENCES units(unit_id),
   component_id INTEGER NOT NULL REFERENCES components(component_id),
+  received_at TIMESTAMPTZ,
+  received_by INTEGER REFERENCES users(user_id),
+  received_point_id INTEGER REFERENCES points(point_id),
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (unit_id, component_id)
 );
 
+ALTER TABLE unit_components ADD COLUMN IF NOT EXISTS received_at TIMESTAMPTZ;
+ALTER TABLE unit_components ADD COLUMN IF NOT EXISTS received_by INTEGER REFERENCES users(user_id);
+ALTER TABLE unit_components ADD COLUMN IF NOT EXISTS received_point_id INTEGER REFERENCES points(point_id);
 ALTER TABLE unit_components ADD COLUMN IF NOT EXISTS component_barcode TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS unit_components_component_barcode_unique
   ON unit_components(component_barcode)
@@ -136,7 +155,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS unit_components_component_barcode_unique
 CREATE TABLE IF NOT EXISTS inventory_history (
   transaction_id SERIAL PRIMARY KEY,
   unit_id INTEGER NOT NULL REFERENCES units(unit_id),
-  event_type TEXT NOT NULL CHECK (event_type IN ('COMPONENT', 'RECEIVED', 'DELIVERED', 'REVERSED')),
+  event_type TEXT NOT NULL CHECK (event_type IN ('COMPONENT', 'COMPONENT_RECEIVED', 'RECEIVED', 'DELIVERED', 'REVERSED')),
+  component_id INTEGER REFERENCES components(component_id),
   point_id INTEGER REFERENCES points(point_id),
   user_id INTEGER NOT NULL REFERENCES users(user_id),
   reason TEXT,
@@ -144,12 +164,46 @@ CREATE TABLE IF NOT EXISTS inventory_history (
   original_transaction_id INTEGER REFERENCES inventory_history(transaction_id)
 );
 
+ALTER TABLE inventory_history ADD COLUMN IF NOT EXISTS component_id INTEGER REFERENCES components(component_id);
+DO $$
+DECLARE
+  event_constraint RECORD;
+BEGIN
+  FOR event_constraint IN
+    SELECT conname, pg_get_constraintdef(oid) AS definition
+    FROM pg_constraint
+    WHERE conrelid = 'barcode_inventory.inventory_history'::regclass
+      AND contype = 'c'
+  LOOP
+    IF event_constraint.definition LIKE '%event_type%'
+       AND event_constraint.definition NOT LIKE '%COMPONENT_RECEIVED%' THEN
+      EXECUTE format('ALTER TABLE inventory_history DROP CONSTRAINT %I', event_constraint.conname);
+    END IF;
+  END LOOP;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conrelid = 'barcode_inventory.inventory_history'::regclass
+      AND contype = 'c'
+      AND pg_get_constraintdef(oid) LIKE '%COMPONENT_RECEIVED%'
+  ) THEN
+    ALTER TABLE inventory_history
+      ADD CONSTRAINT inventory_history_event_type_check
+      CHECK (event_type IN ('COMPONENT', 'COMPONENT_RECEIVED', 'RECEIVED', 'DELIVERED', 'REVERSED'));
+  END IF;
+END $$;
+
 CREATE UNIQUE INDEX IF NOT EXISTS inventory_history_one_reversal
   ON inventory_history(original_transaction_id)
   WHERE original_transaction_id IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS inventory_history_unit_time
   ON inventory_history(unit_id, transaction_time DESC);
+
+CREATE INDEX IF NOT EXISTS inventory_history_component
+  ON inventory_history(component_id, transaction_time DESC)
+  WHERE component_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS audit_logs (
   log_id SERIAL PRIMARY KEY,

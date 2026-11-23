@@ -1,8 +1,7 @@
-import { createHmac } from "node:crypto";
 import { pool } from "../../db.js";
 import { ApiError } from "../errors/api-error.js";
 import { permissionsForRole } from "../auth/roles.js";
-import { verifySessionToken } from "../controllers/auth.controller.js";
+import { passwordVersion, verifySessionToken } from "../auth/session-token.js";
 
 const SESSION_COOKIE = "inventory_session";
 
@@ -11,10 +10,6 @@ function sessionToken(req) {
   const entry = cookies.split(";").map((cookie) => cookie.trim())
     .find((cookie) => cookie.startsWith(`${SESSION_COOKIE}=`));
   return entry ? entry.slice(SESSION_COOKIE.length + 1) : null;
-}
-
-function sessionSecret() {
-  return process.env.SESSION_SECRET || "local-development-session-secret-change-me";
 }
 
 function requireAuth(req, _res, next) {
@@ -33,10 +28,7 @@ function requireAuth(req, _res, next) {
   ).then((result) => {
     if (!result.rowCount) throw new ApiError(401, "UNAUTHENTICATED", "Your session has expired. Sign in again.");
     const user = result.rows[0];
-    const passwordVersion = createHmac("sha256", sessionSecret())
-      .update(user.password_hash || "")
-      .digest("base64url");
-    if (passwordVersion !== session.passwordVersion) {
+    if (passwordVersion(user.password_hash) !== session.passwordVersion) {
       throw new ApiError(401, "UNAUTHENTICATED", "Your session is no longer valid. Sign in again.");
     }
     req.actor = { ...user, permissions: permissionsForRole(user.role) };
