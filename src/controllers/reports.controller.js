@@ -12,7 +12,8 @@ async function stockDetails(req, res) {
   const count = await pool.query(
     `SELECT COUNT(*)::integer AS total FROM units pi
      JOIN products p ON p.product_id = pi.product_id
-     WHERE ($1::text IS NULL OR pi.status = $1)
+     WHERE pi.status IN ('IN_STOCK', 'DELIVERED')
+       AND ($1::text IS NULL OR pi.status = $1)
        AND ($2::text IS NULL OR pi.barcode ILIKE $2 OR p.product_name ILIKE $2)`,
     values,
   );
@@ -23,7 +24,8 @@ async function stockDetails(req, res) {
      FROM units pi
      JOIN products p ON p.product_id = pi.product_id
      LEFT JOIN points sp ON sp.point_id = pi.receive_point_id
-     WHERE ($1::text IS NULL OR pi.status = $1)
+     WHERE pi.status IN ('IN_STOCK', 'DELIVERED')
+       AND ($1::text IS NULL OR pi.status = $1)
        AND ($2::text IS NULL OR pi.barcode ILIKE $2 OR p.product_name ILIKE $2)
      ORDER BY pi.created_at DESC LIMIT $3 OFFSET $4`,
     [...values, pageSize, offset],

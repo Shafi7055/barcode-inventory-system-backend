@@ -533,8 +533,8 @@
         "tags": [
           "Inventory"
         ],
-        "summary": "Attach a component to a product instance",
-        "description": "Resolve both barcodes and create the product-instance/component association atomically.",
+        "summary": "Track a component on a product unit",
+        "description": "Register the unit as pending receipt when first scanned, then attach its component before the unit is received.",
         "requestBody": {
           "required": true,
           "content": {
@@ -548,11 +548,13 @@
                 "properties": {
                   "productBarcode": {
                     "type": "string",
-                    "minLength": 1
+                    "pattern": "^[A-Z]{3}-[0-9]{8}$",
+                    "example": "FRG-00000120"
                   },
                   "componentBarcode": {
                     "type": "string",
-                    "minLength": 1
+                    "pattern": "^[A-Z]{3}-[A-Z]{3}-[0-9]{8}$",
+                    "example": "FRG-CMP-00000120"
                   }
                 }
               }
@@ -561,7 +563,7 @@
         },
         "responses": {
           "201": {
-            "description": "Component association created",
+            "description": "Component association created; unit remains pending receipt",
             "content": {
               "application/json": {
                 "schema": {
@@ -631,13 +633,13 @@
                 "type": "object",
                 "required": [
                   "barcode",
-                  "pointId",
-                  "productId"
+                  "pointId"
                 ],
                 "properties": {
                   "barcode": {
                     "type": "string",
-                    "minLength": 1
+                    "pattern": "^[A-Z]{3}-[0-9]{8}$",
+                    "example": "FRG-00000120"
                   },
                   "pointId": {
                     "type": "integer",
@@ -645,7 +647,8 @@
                   },
                   "productId": {
                     "type": "integer",
-                    "minimum": 1
+                    "minimum": 1,
+                    "description": "Optional legacy compatibility field; product is determined from the registered unit."
                   }
                 }
               }

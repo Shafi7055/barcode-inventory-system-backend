@@ -40,8 +40,8 @@ All writes are attributed to the authenticated user. Login, logout, registration
 | Session / logout / password | `GET /auth/me`, `POST /auth/logout`, `POST /auth/password` |
 | User management (Admin) | `GET /users`, `GET /users/roles`, `POST /users`, `PATCH /users/{userId}` |
 | Dashboard | `GET /dashboard` |
-| Component tracking | `POST /component-tracking` |
-| Receive stock | `GET /products`, `GET /stock-points?type=RECEIVE`, `POST /receipts` |
+| Component tracking | `POST /component-tracking` (registers a pending product unit and tracks its components) |
+| Receive stock | `GET /stock-points?type=RECEIVE`, `POST /receipts` |
 | Deliver stock | `GET /stock-points?type=DELIVERY`, `POST /deliveries` |
 | Products / components | `GET` and `POST /products` or `/components` |
 | Receive / delivery points | `GET` and `POST /stock-points` with the corresponding type |
@@ -53,7 +53,7 @@ All writes are attributed to the authenticated user. Login, logout, registration
 
 ## Data model
 
-The schema keeps product/component catalog codes separate from scanned barcodes. Receiving requires a product and receive point; a new product instance is created for an unseen barcode. Receive and delivery point types are `RECEIVE` and `DELIVERY`; product-instance statuses are `IN_STOCK` and `DELIVERED`.
+The workflow is component tracking → receiving → delivery. Component tracking registers a product unit as `PENDING_RECEIPT`; receiving requires at least one tracked component and changes it to `IN_STOCK`; delivery changes it to `DELIVERED`. Product unit barcodes use `PRD-00000001`, and component barcodes use `PRD-CMP-00000001`. Product codes and component codes are inferred from the barcode prefixes.
 
 ## Run locally
 

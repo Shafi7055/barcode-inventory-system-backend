@@ -106,10 +106,18 @@ CREATE TABLE IF NOT EXISTS units (
   unit_id SERIAL PRIMARY KEY,
   product_id INTEGER NOT NULL REFERENCES products(product_id),
   barcode TEXT NOT NULL UNIQUE,
-  status TEXT NOT NULL DEFAULT 'IN_STOCK' CHECK (status IN ('IN_STOCK', 'DELIVERED')),
+  status TEXT NOT NULL DEFAULT 'PENDING_RECEIPT'
+    CHECK (status IN ('PENDING_RECEIPT', 'IN_STOCK', 'DELIVERED')),
   receive_point_id INTEGER REFERENCES points(point_id),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE units DROP CONSTRAINT IF EXISTS units_status_check;
+ALTER TABLE units DROP CONSTRAINT IF EXISTS product_instances_status_check;
+ALTER TABLE units
+  ADD CONSTRAINT units_status_check
+  CHECK (status IN ('PENDING_RECEIPT', 'IN_STOCK', 'DELIVERED'));
+ALTER TABLE units ALTER COLUMN status SET DEFAULT 'PENDING_RECEIPT';
 
 CREATE TABLE IF NOT EXISTS unit_components (
   id SERIAL PRIMARY KEY,
@@ -119,6 +127,11 @@ CREATE TABLE IF NOT EXISTS unit_components (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (unit_id, component_id)
 );
+
+ALTER TABLE unit_components ADD COLUMN IF NOT EXISTS component_barcode TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS unit_components_component_barcode_unique
+  ON unit_components(component_barcode)
+  WHERE component_barcode IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS inventory_history (
   transaction_id SERIAL PRIMARY KEY,
@@ -147,5 +160,4 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   new_value JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
 
